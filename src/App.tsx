@@ -85,6 +85,8 @@ const COPY: Record<
       close: string;
     };
     footnote: string;
+    builtBy: string;
+    repo: string;
     sourceIntro: string;
     latestSnapshot: string;
     dataMissingTitle: string;
@@ -136,6 +138,8 @@ const COPY: Record<
     },
     footnote:
       "Les dades provenen dels conjunts oficials d'arbrat viari, de zona i de parcs, i s'han optimitzat per a visualització web estàtica.",
+    builtBy: "Creat per Alejandro Fontal",
+    repo: "Repositori GitHub",
     sourceIntro: "Conjunts d'origen",
     latestSnapshot: "Darrera actualització",
     dataMissingTitle: "Falten dades.",
@@ -190,6 +194,8 @@ const COPY: Record<
     },
     footnote:
       "Los datos proceden de los conjuntos oficiales de arbolado viario, de zona y de parques, y se han optimizado para visualización web estática.",
+    builtBy: "Creado por Alejandro Fontal",
+    repo: "Repositorio GitHub",
     sourceIntro: "Conjuntos de origen",
     latestSnapshot: "Última actualización",
     dataMissingTitle: "Faltan datos.",
@@ -244,6 +250,8 @@ const COPY: Record<
     },
     footnote:
       "The data comes from the official street, zone, and park tree datasets and has been optimized for static web delivery.",
+    builtBy: "Built by Alejandro Fontal",
+    repo: "GitHub repository",
     sourceIntro: "Source datasets",
     latestSnapshot: "Latest update",
     dataMissingTitle: "Data missing.",
@@ -795,6 +803,15 @@ function App() {
           </div>
 
           <p className="footnote">{copy.footnote}</p>
+          <p className="attribution">
+            <a href="https://alfontal.dev" target="_blank" rel="noreferrer">
+              {copy.builtBy}
+            </a>
+            <span> · </span>
+            <a href="https://github.com/AlFontal/arbres-bcn" target="_blank" rel="noreferrer">
+              {copy.repo}
+            </a>
+          </p>
 
           {(summaryError || tilesError) && (
             <div className="status status-error">
