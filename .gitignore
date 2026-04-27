@@ -9,6 +9,7 @@ vite.config.d.ts
 *.png
 !public/logo.png
 !public/favicon-*.png
+!public/og-image.png
 
 # Generated geodata artifacts
 data/*.parquet
