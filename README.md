@@ -1,120 +1,81 @@
-# Barcelona Trees MVP
+<p align="center">
+  <img src="public/logo.png" alt="Arbrat BCN logo" width="180">
+</p>
 
-Minimal static web map for exploring the latest official Barcelona tree datasets from Open Data BCN.
+# Arbrat BCN
 
-## Stack
+[![Live site](https://img.shields.io/badge/live-alfontal.github.io%2Farbres--bcn-4d7a5b?style=flat-square)](https://alfontal.github.io/arbres-bcn/)
+[![Deploy Pages](https://github.com/AlFontal/arbres-bcn/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/AlFontal/arbres-bcn/actions/workflows/deploy-pages.yml)
+[![Source code](https://img.shields.io/badge/github-AlFontal%2Farbres--bcn-24292f?style=flat-square)](https://github.com/AlFontal/arbres-bcn)
+[![Data source](https://img.shields.io/badge/data-Open%20Data%20BCN-0b7285?style=flat-square)](https://opendata-ajuntament.barcelona.cat/data/ca/)
 
-- Python for data preparation
-- Tippecanoe to build vector tiles
-- PMTiles for static tile serving
-- MapLibre GL JS for the basemap
-- deck.gl for point rendering and interaction
-- Vite + React + TypeScript for the frontend
+Arbrat BCN is a static interactive map for exploring Barcelona's public tree inventory. It brings together the city's official street, zone, and park tree datasets into a fast browser map with filtering, species summaries, district framing, and multilingual UI.
 
-## Official source datasets
+The interface defaults to Catalan and also includes Spanish and English.
 
-The app fetches the current quarterly CSV snapshots from the official Open Data BCN dataset pages:
+## Data sources
 
-- `arbrat-viari`: <https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-viari>
-- `arbrat-zona`: <https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-zona>
-- `arbrat-parcs`: <https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-parcs>
+The map is built from the official Barcelona Open Data datasets:
 
-The current pipeline fetches the latest CSV ZIP resource for each package through the CKAN API, extracts the CSVs into `data/raw/`, merges them, and produces a single web-optimized GeoJSON sequence plus PMTiles archive.
+- [`arbrat-viari`](https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-viari)
+- [`arbrat-zona`](https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-zona)
+- [`arbrat-parcs`](https://opendata-ajuntament.barcelona.cat/data/ca/dataset/arbrat-parcs)
 
-As verified from the official CKAN metadata on April 27, 2026, the latest quarterly resources for all three datasets are the `2026_1T` snapshots created on April 1, 2026.
+The data pipeline fetches the latest quarterly CSV ZIP resource from each dataset through the CKAN API, extracts them, merges them, normalizes coordinates to WGS84, and exports a PMTiles archive for static hosting.
 
-## Dataset schema
+As currently verified in this project, the latest snapshots in use are the `2026_1T` resources published on April 1, 2026.
 
-The merged dataset currently contains **222,106 rows**. The most relevant fields for this MVP are:
+## What the project includes
 
-- `codi`: tree identifier
-- `x_etrs89`, `y_etrs89`: projected coordinates in ETRS89 / UTM zone 31N
-- `latitud`, `longitud`: geographic coordinates already close to WGS84
-- `tipus_element`: tree or palm type
-- `cat_nom_cientific`, `cat_nom_castella`, `cat_nom_catala`: species names
-- `categoria_arbrat`: tree category
-- `espai_verd`, `adreca`: green space / street address
-- `nom_barri`, `nom_districte`: neighborhood and district
-- `data_plantacio`, `tipus_aigua`, `tipus_reg`, `catalogacio`: planting and maintenance metadata
+- A static frontend built with Vite, React, TypeScript, MapLibre GL JS, and deck.gl
+- A Python data-preparation pipeline
+- A PMTiles build step using Tippecanoe
+- A GitHub Pages deployment workflow
 
-The preprocessing step keeps only public-facing fields that are useful for display, ensures WGS84 lon/lat, adds the dataset source slug, and exports point features as GeoJSON sequence.
+## Run locally
 
-## Install
-
-1. Install Node.js 20+ and Python 3.11+.
-2. Install frontend dependencies:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Install Tippecanoe.
-
-On macOS:
-
-```bash
-brew install tippecanoe
-```
-
-## Prepare the data
-
-Fetch the latest official CSV snapshots and prepare the merged web dataset:
+Fetch and prepare the official data:
 
 ```bash
 npm run prepare:data
 ```
 
-This generates:
-
-- `data/raw/arbrat-viari.csv`
-- `data/raw/arbrat-zona.csv`
-- `data/raw/arbrat-parcs.csv`
-- `data/raw/sources.json`
-- `data/processed/trees.geojsonseq`
-- `public/data/trees-summary.json`
-
-## Build the PMTiles archive
-
-Once the processed GeoJSON sequence exists:
+Build the PMTiles archive:
 
 ```bash
 npm run build:tiles
 ```
 
-This generates:
-
-- `public/data/trees.pmtiles`
-
-The Tippecanoe command uses `-P` for GeoJSON sequence input and builds a single PMTiles archive that can be served from static hosting.
-
-## Run locally
-
-After data preparation and tile generation:
+Start the local app:
 
 ```bash
 npm run dev
 ```
 
-Open the local Vite URL, usually `http://localhost:5173`.
-
-## Production build
-
-Build the frontend:
+## Build for production
 
 ```bash
 npm run build
 ```
 
-Preview the production bundle locally:
+## Generated artifacts
 
-```bash
-npm run preview
-```
+The project intentionally keeps the publishable static data in `public/data/`:
+
+- `public/data/trees.pmtiles`
+- `public/data/trees-summary.json`
+
+Raw downloads and intermediate processed files stay out of version control.
 
 ## Notes
 
-- No backend is required.
-- The UI defaults to Catalan and includes built-in switches for Spanish and English.
-- The map uses raster basemaps and deck.gl for the tree overlay.
-- `public/data/trees.pmtiles` relies on HTTP range requests, so the static host must support byte-range responses.
-- Generated raw and derived geodata artifacts are ignored in `.gitignore` to keep large files out of version control.
+- The map is designed for static hosting, including GitHub Pages.
+- PMTiles requires HTTP range requests from the hosting platform.
+- The hosted project currently lives at:
+  - <https://alfontal.github.io/arbres-bcn/>
