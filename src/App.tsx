@@ -16,6 +16,7 @@ import type { PickingInfo } from "@deck.gl/core";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { DatasetSummary, SummarySpecies, TreeFeature, TreeProperties } from "./types";
+import mobileStyles from "./App.mobile.module.css";
 
 const BARCELONA_CENTER: [number, number] = [2.16859, 41.3874];
 const PMTILES_URL = `${import.meta.env.BASE_URL}data/trees.pmtiles`;
@@ -81,6 +82,7 @@ const COPY: Record<
     };
     panels: {
       preferences: string;
+      filters: string;
       open: string;
       close: string;
     };
@@ -133,6 +135,7 @@ const COPY: Record<
     },
     panels: {
       preferences: "Idioma i mapa base",
+      filters: "Filtres",
       open: "Obre",
       close: "Tanca",
     },
@@ -189,6 +192,7 @@ const COPY: Record<
     },
     panels: {
       preferences: "Idioma y mapa base",
+      filters: "Filtros",
       open: "Abrir",
       close: "Cerrar",
     },
@@ -245,6 +249,7 @@ const COPY: Record<
     },
     panels: {
       preferences: "Language and basemap",
+      filters: "Filters",
       open: "Open",
       close: "Close",
     },
@@ -332,6 +337,8 @@ function App() {
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState(false);
   const [basemap, setBasemap] = useState<BasemapId>("muted");
   const [locale, setLocale] = useState<Locale>("ca");
+  const [isMobileLayout, setIsMobileLayout] = useState(() => getIsMobileLayout());
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [hoverState, setHoverState] = useState<HoverState>(null);
@@ -339,6 +346,28 @@ function App() {
   const speciesListId = useId();
 
   const copy = COPY[locale];
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 760px)");
+    const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
+
+    updateLayout();
+    mediaQuery.addEventListener("change", updateLayout);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateLayout);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMobileLayout) {
+      setHoverState(null);
+    }
+  }, [isMobileLayout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -403,7 +432,7 @@ function App() {
       zoom: 12.2,
       minZoom: 10,
       maxZoom: 18,
-      cooperativeGestures: true,
+      cooperativeGestures: !getIsMobileLayout(),
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -495,6 +524,13 @@ function App() {
       ? selectedFeature
       : null;
 
+  useEffect(() => {
+    if (isMobileLayout && selectedFeatureVisible) {
+      setFiltersOpen(false);
+      setPreferencesOpen(false);
+    }
+  }, [isMobileLayout, selectedFeatureVisible]);
+
   const layers = useMemo(() => {
     if (!tileSource) {
       return [];
@@ -540,13 +576,13 @@ function App() {
           pointType: "circle",
           filled: true,
           stroked: false,
-          getPointRadius: getPointRadius(props.tile.index.z),
+          getPointRadius: getPointRadius(props.tile.index.z, isMobileLayout),
           pointRadiusUnits: "pixels",
-          pointRadiusMinPixels: 2.4,
-          pointRadiusMaxPixels: 12,
+          pointRadiusMinPixels: isMobileLayout ? 3.2 : 2.4,
+          pointRadiusMaxPixels: isMobileLayout ? 8.5 : 12,
           getFillColor: (feature: any) =>
             getSpeciesColor(feature.properties?.scientific_name, speciesColorMap),
-          opacity: 1,
+          opacity: getPointOpacity(props.tile.index.z, isMobileLayout),
           pickable: true,
           autoHighlight: true,
           highlightColor: [249, 194, 46, 220],
@@ -556,32 +592,80 @@ function App() {
           },
         });
       },
-      onHover: (info) => handleHover(info, setHoverState),
+      onHover: (info) => {
+        if (isMobileLayout) {
+          setHoverState(null);
+          return;
+        }
+
+        handleHover(info, setHoverState);
+      },
       onClick: (info) => {
         const feature = asTreeFeature(info.object);
+        if (isMobileLayout) {
+          setFiltersOpen(false);
+        }
+
+        if (feature && isMobileLayout) {
+          setPreferencesOpen(false);
+        }
         setSelectedFeature(feature);
       },
     });
 
-    const selectedLayer =
+    const selectedHaloLayer =
       selectedFeatureVisible &&
       new ScatterplotLayer<TreeFeature>({
-        id: "selected-tree-layer",
+        id: "selected-tree-halo-layer",
         data: [selectedFeatureVisible],
         getPosition: (feature) => feature.geometry.coordinates as [number, number],
-        getRadius: 13,
+        getRadius: isMobileLayout ? 17 : 15,
+        radiusUnits: "pixels",
+        filled: true,
+        stroked: false,
+        getFillColor: [252, 249, 241, 160],
+        pickable: false,
+      });
+
+    const selectedOutlineLayer =
+      selectedFeatureVisible &&
+      new ScatterplotLayer<TreeFeature>({
+        id: "selected-tree-outline-layer",
+        data: [selectedFeatureVisible],
+        getPosition: (feature) => feature.geometry.coordinates as [number, number],
+        getRadius: isMobileLayout ? 9.5 : 8.5,
         radiusUnits: "pixels",
         filled: false,
         stroked: true,
         lineWidthUnits: "pixels",
-        getLineWidth: 3,
-        getLineColor: [245, 173, 0, 240],
+        getLineWidth: isMobileLayout ? 2.75 : 2.5,
+        getLineColor: [84, 115, 68, 230],
         pickable: false,
       });
 
-    return selectedLayer ? [treesLayer, selectedLayer] : [treesLayer];
+    const selectedCoreLayer =
+      selectedFeatureVisible &&
+      new ScatterplotLayer<TreeFeature>({
+        id: "selected-tree-core-layer",
+        data: [selectedFeatureVisible],
+        getPosition: (feature) => feature.geometry.coordinates as [number, number],
+        getRadius: isMobileLayout ? 4.3 : 3.8,
+        radiusUnits: "pixels",
+        filled: true,
+        stroked: true,
+        lineWidthUnits: "pixels",
+        getLineWidth: 1.75,
+        getFillColor: [84, 115, 68, 255],
+        getLineColor: [252, 249, 241, 245],
+        pickable: false,
+      });
+
+    return selectedHaloLayer && selectedOutlineLayer && selectedCoreLayer
+      ? [treesLayer, selectedHaloLayer, selectedOutlineLayer, selectedCoreLayer]
+      : [treesLayer];
   }, [
     filterKey,
+    isMobileLayout,
     kindFilter,
     districtFilter,
     selectedSpeciesFilter,
@@ -591,15 +675,37 @@ function App() {
   ]);
 
   useEffect(() => {
-    overlayRef.current?.setProps({ layers });
-  }, [layers]);
+    overlayRef.current?.setProps({
+      layers,
+      pickingRadius: isMobileLayout ? 18 : 4,
+    });
+  }, [isMobileLayout, layers]);
+
+  useEffect(() => {
+    mapRef.current?.resize();
+  }, [filtersOpen, isMobileLayout, preferencesOpen, selectedFeatureVisible]);
+
+  useEffect(() => {
+    if (!isMobileLayout || !mapRef.current || !selectedFeatureVisible) {
+      return;
+    }
+
+    const [longitude, latitude] = selectedFeatureVisible.geometry.coordinates;
+
+    mapRef.current.easeTo({
+      center: [longitude, latitude],
+      duration: 320,
+      offset: [0, -120],
+      zoom: Math.max(mapRef.current.getZoom(), 15),
+    });
+  }, [isMobileLayout, selectedFeatureVisible]);
 
   useEffect(() => {
     if (!mapRef.current || !summary) {
       return;
     }
 
-    const padding = { top: 88, right: 88, bottom: 88, left: 420 };
+    const padding = getViewportPadding(isMobileLayout);
 
     if (districtFilter === "all") {
       mapRef.current.fitBounds(
@@ -609,7 +715,7 @@ function App() {
         ],
         {
           padding,
-          duration: 650,
+          duration: isMobileLayout ? 420 : 650,
           maxZoom: 13.2,
         },
       );
@@ -628,190 +734,266 @@ function App() {
       ],
       {
         padding,
-        duration: 650,
+        duration: isMobileLayout ? 420 : 650,
         maxZoom: 15.4,
       },
     );
-  }, [districtBounds, districtFilter, summary]);
+  }, [districtBounds, districtFilter, isMobileLayout, summary]);
 
+  const appShellClassName = [
+    "app-shell",
+    selectedFeatureVisible ? "has-selection" : "",
+    isMobileLayout ? "is-mobile" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const activeFilterCount =
+    Number(districtFilter !== "all") +
+    Number(kindFilter !== "all") +
+    Number(Boolean(selectedSpeciesFilter));
   return (
-    <main className={selectedFeatureVisible ? "app-shell has-selection" : "app-shell"}>
+    <main className={appShellClassName}>
       <div ref={mapContainerRef} className="map" />
 
-      <section className="panel panel-primary">
-        <div className="panel-primary-scroll">
-          <p className="eyebrow">{copy.eyebrow}</p>
-          <h1>{copy.title}</h1>
-          <p className="lede">{copy.description}</p>
+      <section
+        className={
+          isMobileLayout
+            ? joinClassNames("panel", "panel-primary", mobileStyles.panelPrimaryMobile)
+            : "panel panel-primary"
+        }
+      >
+        {isMobileLayout && selectedFeatureVisible && (
+          <SelectedTreeSection
+            className={mobileStyles.mobileSelectedOverlay}
+            feature={selectedFeatureVisible}
+            locale={locale}
+            title={copy.sections.selectedTree}
+            closeLabel={copy.panels.close}
+            compact
+            onClear={() => setSelectedFeature(null)}
+          />
+        )}
 
-          <div className="stats-grid" aria-label="Dataset summary">
-            <StatCard label={copy.stats.features} value={formatInt(filteredFeatureCount)} />
-            <StatCard label={copy.stats.species} value={formatInt(filteredSpeciesCount)} />
+        <div
+          className={
+            isMobileLayout
+              ? joinClassNames("panel-primary-scroll", mobileStyles.panelPrimaryScrollMobile)
+              : "panel-primary-scroll"
+          }
+        >
+          <div className={isMobileLayout ? "mobile-sheet-header" : undefined}>
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h1>{copy.title}</h1>
+            {!isMobileLayout && <p className="lede">{copy.description}</p>}
           </div>
 
-          <div className="control-stack">
-            <label className="control">
-              <span>{copy.controls.district}</span>
-              <select
-                value={districtFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  startTransition(() => setDistrictFilter(value));
-                }}
-              >
-                <option value="all">{copy.controls.allDistricts}</option>
-                {districts.map((district) => (
-                  <option key={district} value={district}>
-                    {district}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {!isMobileLayout && (
+            <div className="stats-grid" aria-label="Dataset summary">
+              <StatCard label={copy.stats.features} value={formatInt(filteredFeatureCount)} />
+              <StatCard label={copy.stats.species} value={formatInt(filteredSpeciesCount)} />
+            </div>
+          )}
 
-            <label className="control">
-              <span>{copy.controls.treeType}</span>
-              <select
-                value={kindFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  startTransition(() => setKindFilter(value));
-                }}
-              >
-                <option value="all">{copy.controls.allTypes}</option>
-                {kinds.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {translateKind(item.value, locale)} ({formatInt(item.count)})
-                  </option>
-                ))}
-              </select>
-            </label>
+          {!isMobileLayout && (
+            <FilterControls
+              copy={copy}
+              districtFilter={districtFilter}
+              districts={districts}
+              kindFilter={kindFilter}
+              kinds={kinds}
+              locale={locale}
+              setDistrictFilter={setDistrictFilter}
+              setKindFilter={setKindFilter}
+              setSelectedSpeciesFilter={setSelectedSpeciesFilter}
+              setSpeciesInput={setSpeciesInput}
+              setSpeciesMenuOpen={setSpeciesMenuOpen}
+              species={species}
+              speciesInput={speciesInput}
+              speciesListId={speciesListId}
+              speciesMenuOpen={speciesMenuOpen}
+              speciesSuggestions={speciesSuggestions}
+            />
+          )}
 
-            <label className="control">
-              <span>{copy.controls.species}</span>
-              <div className="combo-box">
-                <input
-                  value={speciesInput}
-                  onFocus={() => setSpeciesMenuOpen(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setSpeciesMenuOpen(false), 120);
-                  }}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    startTransition(() => {
-                      setSpeciesInput(value);
-                      if (!value.trim()) {
-                        setSelectedSpeciesFilter(null);
+          {isMobileLayout && (
+            <>
+              <div className={mobileStyles.mobileToolbar}>
+                <button
+                  type="button"
+                  className={
+                    filtersOpen
+                      ? joinClassNames(mobileStyles.mobileToolbarButton, mobileStyles.mobileToolbarButtonActive)
+                      : mobileStyles.mobileToolbarButton
+                  }
+                  onClick={() => {
+                    setFiltersOpen((value) => {
+                      const next = !value;
+                      if (next) {
+                        setPreferencesOpen(false);
                       }
-                      setSpeciesMenuOpen(true);
+                      return next;
                     });
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      const match = species.find((item) => item.scientific_name === speciesInput.trim());
-                      if (match) {
-                        event.preventDefault();
-                        startTransition(() => {
-                          setSelectedSpeciesFilter(match.scientific_name);
-                          setSpeciesInput(match.scientific_name);
-                          setSpeciesMenuOpen(false);
-                        });
+                >
+                  <span>{copy.panels.filters}</span>
+                  {activeFilterCount > 0 && <strong className={mobileStyles.mobileToolbarCount}>{activeFilterCount}</strong>}
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    preferencesOpen
+                      ? joinClassNames(mobileStyles.mobileToolbarButton, mobileStyles.mobileToolbarButtonActive)
+                      : mobileStyles.mobileToolbarButton
+                  }
+                  onClick={() => {
+                    setPreferencesOpen((value) => {
+                      const next = !value;
+                      if (next) {
+                        setFiltersOpen(false);
                       }
-                    }
+                      return next;
+                    });
                   }}
-                  aria-expanded={speciesMenuOpen}
-                  aria-controls={speciesListId}
-                  placeholder={copy.controls.speciesPlaceholder}
-                />
-                {speciesMenuOpen && speciesSuggestions.length > 0 && (
-                  <ul id={speciesListId} className="combo-list" role="listbox">
-                    {speciesSuggestions.map((item) => (
-                      <li key={speciesKey(item)}>
-                        <button
-                          type="button"
-                          className="combo-option"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            startTransition(() => {
-                              setSelectedSpeciesFilter(item.scientific_name);
-                              setSpeciesInput(item.scientific_name);
-                              setSpeciesMenuOpen(false);
-                            });
+                >
+                  <span>{copy.panels.preferences}</span>
+                </button>
+              </div>
+
+              {filtersOpen && (
+                <div className={mobileStyles.mobileToolbarPanel}>
+                  <FilterControls
+                    copy={copy}
+                    districtFilter={districtFilter}
+                    districts={districts}
+                    kindFilter={kindFilter}
+                    kinds={kinds}
+                    locale={locale}
+                    setDistrictFilter={setDistrictFilter}
+                    setKindFilter={setKindFilter}
+                    setSelectedSpeciesFilter={setSelectedSpeciesFilter}
+                    setSpeciesInput={setSpeciesInput}
+                    setSpeciesMenuOpen={setSpeciesMenuOpen}
+                    species={species}
+                    speciesInput={speciesInput}
+                    speciesListId={speciesListId}
+                    speciesMenuOpen={speciesMenuOpen}
+                    speciesSuggestions={speciesSuggestions}
+                  />
+                </div>
+              )}
+
+              {preferencesOpen && (
+                <div className={mobileStyles.mobileToolbarPanel}>
+                  <div className="panel-collapsible">
+                    <div className="control compact-control">
+                      <span>{copy.controls.language}</span>
+                      <div className="toggle-row" role="tablist" aria-label={copy.controls.language}>
+                        {(["ca", "es", "en"] as const).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={option === locale ? "toggle-chip is-active" : "toggle-chip"}
+                            onClick={() => {
+                              startTransition(() => setLocale(option));
+                            }}
+                          >
+                            {option.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="control compact-control">
+                      <span>{copy.controls.basemap}</span>
+                      <div className="toggle-row" role="tablist" aria-label={copy.controls.basemap}>
+                        {BASEMAP_OPTIONS.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={option.id === basemap ? "toggle-chip is-active" : "toggle-chip"}
+                            onClick={() => {
+                              startTransition(() => setBasemap(option.id));
+                            }}
+                          >
+                            {option.label[locale]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {!isMobileLayout && (
+            <>
+              <div className="species-list">
+                <p className="section-label">{copy.sections.topSpecies}</p>
+                <ul>
+                  {topSpeciesBreakdown.map((item) => (
+                    <li key={item.key} className="species-bar-item">
+                      <span className="species-bar-label" title={item.labelByLocale[locale]}>
+                        {item.labelByLocale[locale]}
+                      </span>
+                      <div
+                        className="species-bar-track"
+                        aria-label={`${item.labelByLocale[locale]}: ${formatInt(item.count)} (${formatPercent(item.count / item.total, locale)})`}
+                      >
+                        <div
+                          className="species-bar-fill"
+                          style={{
+                            width: `${item.total > 0 ? (item.count / item.total) * 100 : 0}%`,
+                            backgroundColor: toCssColor(item.color),
                           }}
-                        >
-                          <span className="combo-option-main">{displaySpeciesName(item, locale)}</span>
-                          <span className="combo-option-sub">{item.scientific_name}</span>
-                        </button>
+                        />
+                        <strong className="species-bar-value" title={item.labelByLocale[locale]}>
+                          {formatInt(item.count)} ({formatPercent(item.count / item.total, locale)})
+                        </strong>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="sources-list">
+                <button
+                  type="button"
+                  className="section-toggle"
+                  onClick={() => setSourcesOpen((value) => !value)}
+                >
+                  <span>{copy.sections.officialSources}</span>
+                  <span>{sourcesOpen ? copy.panels.close : copy.panels.open}</span>
+                </button>
+                {sourcesOpen && (
+                  <ul>
+                    {officialSources.map((source) => (
+                      <li key={source.slug}>
+                        <a href={source.page_url} target="_blank" rel="noreferrer">
+                          {copy.datasetNames[source.slug] ?? source.title}
+                        </a>
+                        <span>
+                          {copy.latestSnapshot}: {formatDate(source.resource_created, locale)}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-            </label>
-          </div>
 
-          <div className="species-list">
-            <p className="section-label">{copy.sections.topSpecies}</p>
-            <ul>
-              {topSpeciesBreakdown.map((item) => (
-                <li key={item.key} className="species-bar-item">
-                  <span className="species-bar-label" title={item.labelByLocale[locale]}>
-                    {item.labelByLocale[locale]}
-                  </span>
-                  <div
-                    className="species-bar-track"
-                    aria-label={`${item.labelByLocale[locale]}: ${formatInt(item.count)} (${formatPercent(item.count / item.total, locale)})`}
-                  >
-                    <div
-                      className="species-bar-fill"
-                      style={{
-                        width: `${item.total > 0 ? (item.count / item.total) * 100 : 0}%`,
-                        backgroundColor: toCssColor(item.color),
-                      }}
-                    />
-                    <strong className="species-bar-value" title={item.labelByLocale[locale]}>
-                      {formatInt(item.count)} ({formatPercent(item.count / item.total, locale)})
-                    </strong>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="sources-list">
-            <button
-              type="button"
-              className="section-toggle"
-              onClick={() => setSourcesOpen((value) => !value)}
-            >
-              <span>{copy.sections.officialSources}</span>
-              <span>{sourcesOpen ? copy.panels.close : copy.panels.open}</span>
-            </button>
-            {sourcesOpen && (
-              <ul>
-                {officialSources.map((source) => (
-                  <li key={source.slug}>
-                    <a href={source.page_url} target="_blank" rel="noreferrer">
-                      {copy.datasetNames[source.slug] ?? source.title}
-                    </a>
-                    <span>
-                      {copy.latestSnapshot}: {formatDate(source.resource_created, locale)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <p className="footnote">{copy.footnote}</p>
-          <p className="attribution">
-            <a href="https://alfontal.dev" target="_blank" rel="noreferrer">
-              {copy.builtBy}
-            </a>
-            <span> · </span>
-            <a href="https://github.com/AlFontal/arbres-bcn" target="_blank" rel="noreferrer">
-              {copy.repo}
-            </a>
-          </p>
+              <p className="footnote">{copy.footnote}</p>
+              <p className="attribution">
+                <a href="https://alfontal.dev" target="_blank" rel="noreferrer">
+                  {copy.builtBy}
+                </a>
+                <span> · </span>
+                <a href="https://github.com/AlFontal/arbres-bcn" target="_blank" rel="noreferrer">
+                  {copy.repo}
+                </a>
+              </p>
+            </>
+          )}
 
           {(summaryError || tilesError) && (
             <div className="status status-error">
@@ -823,82 +1005,88 @@ function App() {
         </div>
       </section>
 
-      <aside className="right-rail">
-        <section className="panel panel-language">
-          <button
-            type="button"
-            className="panel-toggle"
-            onClick={() => setPreferencesOpen((value) => !value)}
-          >
-            <span>{copy.panels.preferences}</span>
-            <span>{preferencesOpen ? copy.panels.close : copy.panels.open}</span>
-          </button>
+      {!isMobileLayout && (
+        <aside className="right-rail">
+          <section className="panel panel-language">
+            <button
+              type="button"
+              className="panel-toggle"
+              onClick={() => setPreferencesOpen((value) => !value)}
+            >
+              <span>{copy.panels.preferences}</span>
+              <span>{preferencesOpen ? copy.panels.close : copy.panels.open}</span>
+            </button>
 
-          {preferencesOpen && (
-            <div className="panel-collapsible">
-              <div className="control compact-control">
-                <span>{copy.controls.language}</span>
-                <div className="toggle-row" role="tablist" aria-label={copy.controls.language}>
-                  {(["ca", "es", "en"] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className={option === locale ? "toggle-chip is-active" : "toggle-chip"}
-                      onClick={() => {
-                        startTransition(() => setLocale(option));
-                      }}
-                    >
-                      {option.toUpperCase()}
-                    </button>
-                  ))}
+            {preferencesOpen && (
+              <div className="panel-collapsible">
+                <div className="control compact-control">
+                  <span>{copy.controls.language}</span>
+                  <div className="toggle-row" role="tablist" aria-label={copy.controls.language}>
+                    {(["ca", "es", "en"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={option === locale ? "toggle-chip is-active" : "toggle-chip"}
+                        onClick={() => {
+                          startTransition(() => setLocale(option));
+                        }}
+                      >
+                        {option.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="control compact-control">
+                  <span>{copy.controls.basemap}</span>
+                  <div className="toggle-row" role="tablist" aria-label={copy.controls.basemap}>
+                    {BASEMAP_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={option.id === basemap ? "toggle-chip is-active" : "toggle-chip"}
+                        onClick={() => {
+                          startTransition(() => setBasemap(option.id));
+                        }}
+                      >
+                        {option.label[locale]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="control compact-control">
-                <span>{copy.controls.basemap}</span>
-                <div className="toggle-row" role="tablist" aria-label={copy.controls.basemap}>
-                  {BASEMAP_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={option.id === basemap ? "toggle-chip is-active" : "toggle-chip"}
-                      onClick={() => {
-                        startTransition(() => setBasemap(option.id));
-                      }}
-                    >
-                      {option.label[locale]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="panel panel-legend">
-          <p className="section-label">{copy.sections.speciesColors}</p>
-          <ul className="legend-list">
-            {topSpeciesBreakdown.map((item) => (
-              <li key={item.key}>
-                <span
-                  className="legend-swatch"
-                  style={{ backgroundColor: toCssColor(item.color) }}
-                />
-                <span>{item.labelByLocale[locale]}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {selectedFeatureVisible && (
-          <section className="panel panel-detail">
-            <p className="section-label">{copy.sections.selectedTree}</p>
-            <TooltipBody feature={selectedFeatureVisible} locale={locale} />
+            )}
           </section>
-        )}
-      </aside>
 
-      {hoverState && (
+          <section className="panel panel-legend">
+            <p className="section-label">{copy.sections.speciesColors}</p>
+            <ul className="legend-list">
+              {topSpeciesBreakdown.map((item) => (
+                <li key={item.key}>
+                  <span
+                    className="legend-swatch"
+                    style={{ backgroundColor: toCssColor(item.color) }}
+                  />
+                  <span>{item.labelByLocale[locale]}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {selectedFeatureVisible && (
+            <SelectedTreeSection
+              className="panel panel-detail"
+              feature={selectedFeatureVisible}
+              locale={locale}
+              title={copy.sections.selectedTree}
+              closeLabel={copy.panels.close}
+              onClear={() => setSelectedFeature(null)}
+            />
+          )}
+        </aside>
+      )}
+
+      {!isMobileLayout && hoverState && (
         <aside
           className="tooltip"
           style={{
@@ -923,7 +1111,189 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TooltipBody({ feature, locale }: { feature: TreeFeature; locale: Locale }) {
+function FilterControls({
+  copy,
+  districtFilter,
+  districts,
+  kindFilter,
+  kinds,
+  locale,
+  setDistrictFilter,
+  setKindFilter,
+  setSelectedSpeciesFilter,
+  setSpeciesInput,
+  setSpeciesMenuOpen,
+  species,
+  speciesInput,
+  speciesListId,
+  speciesMenuOpen,
+  speciesSuggestions,
+}: {
+  copy: (typeof COPY)[Locale];
+  districtFilter: string;
+  districts: string[];
+  kindFilter: string;
+  kinds: NonNullable<DatasetSummary["types"]>;
+  locale: Locale;
+  setDistrictFilter: (value: string) => void;
+  setKindFilter: (value: string) => void;
+  setSelectedSpeciesFilter: (value: string | null) => void;
+  setSpeciesInput: (value: string) => void;
+  setSpeciesMenuOpen: (value: boolean) => void;
+  species: SummarySpecies[];
+  speciesInput: string;
+  speciesListId: string;
+  speciesMenuOpen: boolean;
+  speciesSuggestions: SummarySpecies[];
+}) {
+  return (
+    <div className="control-stack">
+      <label className="control">
+        <span>{copy.controls.district}</span>
+        <select
+          value={districtFilter}
+          onChange={(event) => {
+            const value = event.target.value;
+            startTransition(() => setDistrictFilter(value));
+          }}
+        >
+          <option value="all">{copy.controls.allDistricts}</option>
+          {districts.map((district) => (
+            <option key={district} value={district}>
+              {district}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="control">
+        <span>{copy.controls.treeType}</span>
+        <select
+          value={kindFilter}
+          onChange={(event) => {
+            const value = event.target.value;
+            startTransition(() => setKindFilter(value));
+          }}
+        >
+          <option value="all">{copy.controls.allTypes}</option>
+          {kinds.map((item) => (
+            <option key={item.value} value={item.value}>
+              {translateKind(item.value, locale)} ({formatInt(item.count)})
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="control">
+        <span>{copy.controls.species}</span>
+        <div className="combo-box">
+          <input
+            value={speciesInput}
+            onFocus={() => setSpeciesMenuOpen(true)}
+            onBlur={() => {
+              window.setTimeout(() => setSpeciesMenuOpen(false), 120);
+            }}
+            onChange={(event) => {
+              const value = event.target.value;
+              startTransition(() => {
+                setSpeciesInput(value);
+                if (!value.trim()) {
+                  setSelectedSpeciesFilter(null);
+                }
+                setSpeciesMenuOpen(true);
+              });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                const match = species.find((item) => item.scientific_name === speciesInput.trim());
+                if (match) {
+                  event.preventDefault();
+                  startTransition(() => {
+                    setSelectedSpeciesFilter(match.scientific_name);
+                    setSpeciesInput(match.scientific_name);
+                    setSpeciesMenuOpen(false);
+                  });
+                }
+              }
+            }}
+            aria-expanded={speciesMenuOpen}
+            aria-controls={speciesListId}
+            placeholder={copy.controls.speciesPlaceholder}
+          />
+          {speciesMenuOpen && speciesSuggestions.length > 0 && (
+            <ul id={speciesListId} className="combo-list" role="listbox">
+              {speciesSuggestions.map((item) => (
+                <li key={speciesKey(item)}>
+                  <button
+                    type="button"
+                    className="combo-option"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      startTransition(() => {
+                        setSelectedSpeciesFilter(item.scientific_name);
+                        setSpeciesInput(item.scientific_name);
+                        setSpeciesMenuOpen(false);
+                      });
+                    }}
+                  >
+                    <span className="combo-option-main">{displaySpeciesName(item, locale)}</span>
+                    <span className="combo-option-sub">{item.scientific_name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </label>
+    </div>
+  );
+}
+
+function SelectedTreeSection({
+  className,
+  feature,
+  locale,
+  title,
+  closeLabel,
+  compact = false,
+  onClear,
+}: {
+  className: string;
+  feature: TreeFeature;
+  locale: Locale;
+  title: string;
+  closeLabel: string;
+  compact?: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <section
+      className={
+        compact
+          ? joinClassNames(className, mobileStyles.selectedTreeSection, mobileStyles.selectedTreeSectionCompact)
+          : joinClassNames(className, mobileStyles.selectedTreeSection)
+      }
+    >
+      <div className={mobileStyles.selectedTreeHeader}>
+        <p className="section-label">{title}</p>
+        <button type="button" className={mobileStyles.selectedTreeClose} onClick={onClear}>
+          {closeLabel}
+        </button>
+      </div>
+      <TooltipBody feature={feature} locale={locale} compact={compact} />
+    </section>
+  );
+}
+
+function TooltipBody({
+  feature,
+  locale,
+  compact = false,
+}: {
+  feature: TreeFeature;
+  locale: Locale;
+  compact?: boolean;
+}) {
   const props = feature.properties;
   const copy = COPY[locale];
   const sourceLabel =
@@ -941,19 +1311,28 @@ function TooltipBody({ feature, locale }: { feature: TreeFeature; locale: Locale
               : [props.common_name_ca ?? props.common_name_es].filter(Boolean).join(" · ")}
         </span>
       )}
-      <dl className="tooltip-grid">
+      <dl className={compact ? joinClassNames("tooltip-grid", mobileStyles.tooltipGridCompact) : "tooltip-grid"}>
         <MetadataRow label={copy.metadata.type} value={translateKind(props.kind, locale)} />
-        <MetadataRow label={copy.metadata.category} value={translateTreeCategory(props.tree_category, locale)} />
-        <MetadataRow label={copy.metadata.district} value={props.district} />
-        <MetadataRow label={copy.metadata.neighborhood} value={props.neighborhood} />
-        <MetadataRow label={copy.metadata.address} value={props.address} />
-        <MetadataRow label={copy.metadata.greenSpace} value={props.green_space} />
-        <MetadataRow label={copy.metadata.planted} value={props.planting_date} />
-        <MetadataRow label={copy.metadata.irrigation} value={props.irrigation_type} />
-        <MetadataRow label={copy.metadata.water} value={props.water_type} />
-        <MetadataRow label={copy.metadata.heritage} value={props.heritage_status} />
-        <MetadataRow label={copy.metadata.source} value={sourceLabel} />
-        <MetadataRow label={copy.metadata.treeId} value={props.id} />
+        {compact ? (
+          <>
+            <MetadataRow label={copy.metadata.district} value={props.district} />
+            <MetadataRow label={copy.metadata.address} value={props.address ?? props.neighborhood} />
+          </>
+        ) : (
+          <>
+            <MetadataRow label={copy.metadata.category} value={translateTreeCategory(props.tree_category, locale)} />
+            <MetadataRow label={copy.metadata.district} value={props.district} />
+            <MetadataRow label={copy.metadata.neighborhood} value={props.neighborhood} />
+            <MetadataRow label={copy.metadata.address} value={props.address} />
+            <MetadataRow label={copy.metadata.greenSpace} value={props.green_space} />
+            <MetadataRow label={copy.metadata.planted} value={props.planting_date} />
+            <MetadataRow label={copy.metadata.irrigation} value={props.irrigation_type} />
+            <MetadataRow label={copy.metadata.water} value={props.water_type} />
+            <MetadataRow label={copy.metadata.heritage} value={props.heritage_status} />
+            <MetadataRow label={copy.metadata.source} value={sourceLabel} />
+            <MetadataRow label={copy.metadata.treeId} value={props.id} />
+          </>
+        )}
       </dl>
     </div>
   );
@@ -1093,12 +1472,24 @@ function getSpeciesColor(
   return OTHER_SPECIES_COLOR;
 }
 
-function getPointRadius(zoom: number) {
-  if (zoom >= 16) return 6.8;
-  if (zoom >= 15) return 5.8;
-  if (zoom >= 14) return 4.8;
-  if (zoom >= 13) return 3.9;
-  return 3.1;
+function getPointRadius(zoom: number, isMobileLayout = false) {
+  if (isMobileLayout) {
+    return zoom >= 16 ? 5.1 : zoom >= 15 ? 4.2 : zoom >= 14 ? 3.3 : zoom >= 13 ? 2.55 : 1.95;
+  }
+
+  return zoom >= 16 ? 6.8 : zoom >= 15 ? 5.8 : zoom >= 14 ? 4.8 : zoom >= 13 ? 3.9 : 3.1;
+}
+
+function getPointOpacity(zoom: number, isMobileLayout = false) {
+  if (isMobileLayout) {
+    if (zoom >= 16) return 0.96;
+    if (zoom >= 15) return 0.88;
+    if (zoom >= 14) return 0.78;
+    if (zoom >= 13) return 0.68;
+    return 0.58;
+  }
+
+  return 1;
 }
 
 function formatInt(value: number | undefined) {
@@ -1290,6 +1681,36 @@ function buildTopSpeciesBreakdown(
     });
   }
   return top;
+}
+
+function getIsMobileLayout() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+
+  return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function getViewportPadding(isMobileLayout: boolean) {
+  if (isMobileLayout) {
+    return {
+      top: 84,
+      right: 16,
+      bottom: 164,
+      left: 16,
+    };
+  }
+
+  return {
+    top: 88,
+    right: 88,
+    bottom: 88,
+    left: 420,
+  };
+}
+
+function joinClassNames(...classNames: Array<string | false | null | undefined>) {
+  return classNames.filter(Boolean).join(" ");
 }
 
 export default App;

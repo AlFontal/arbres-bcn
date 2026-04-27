@@ -1,0 +1,117 @@
+:global(.panel).panelPrimaryMobile {
+  position: fixed;
+  top: auto;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  width: auto;
+  max-height: calc(100vh - 6.5rem);
+  overflow: visible;
+  padding: 0.95rem 0.95rem calc(0.95rem + env(safe-area-inset-bottom));
+  border-radius: 1.35rem;
+}
+
+:global(.panel-primary-scroll).panelPrimaryScrollMobile {
+  height: auto;
+  max-height: calc(100vh - 8.5rem);
+}
+
+.mobileToolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.mobileToolbarButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2.85rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobileToolbarButtonActive {
+  background: color-mix(in oklch, var(--accent) 13%, var(--paper-strong));
+  border-color: color-mix(in oklch, var(--accent) 36%, var(--line));
+}
+
+.mobileToolbarCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45rem;
+  min-height: 1.45rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--accent) 18%, white);
+  color: var(--accent);
+  font-size: 0.76rem;
+}
+
+.mobileToolbarPanel {
+  margin-top: 0.7rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 1rem;
+  background: var(--paper-strong);
+  border: 1px solid var(--line);
+}
+
+.mobileToolbarPanel :global(.control-stack) {
+  margin-top: 0;
+}
+
+.mobileSelectedOverlay {
+  position: absolute;
+  bottom: calc(100% - 1rem);
+  left: 0.25rem;
+  z-index: 3;
+  width: min(18rem, calc(100vw - 2.5rem));
+  padding: 0.9rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(92 108 79 / 0.2);
+  background: rgb(252 249 241 / 0.985);
+  box-shadow: 0 20px 48px rgb(32 43 28 / 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.selectedTreeSection {
+  container-type: inline-size;
+}
+
+.selectedTreeSectionCompact {
+  width: min(18rem, calc(100vw - 2.5rem));
+}
+
+.selectedTreeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.selectedTreeHeader :global(.section-label) {
+  margin-bottom: 0;
+}
+
+.selectedTreeClose {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.tooltipGridCompact {
+  grid-template-columns: minmax(4.3rem, auto) minmax(0, 1fr);
+}
