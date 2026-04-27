@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.playwright-mcp/
+.omx/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+*.png
+
+# Generated geodata artifacts
+data/*.parquet
+data/raw/
+data/processed/

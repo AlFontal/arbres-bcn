@@ -1,0 +1,33 @@
+{
+  "name": "arbres-bcn",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "fetch:data": "python3 scripts/fetch_bcn_open_data.py",
+    "prepare:data": "python3 scripts/fetch_bcn_open_data.py && python3 scripts/prepare_trees.py",
+    "build:tiles": "bash scripts/build_pmtiles.sh"
+  },
+  "dependencies": {
+    "@deck.gl/geo-layers": "^9.3.1",
+    "@deck.gl/layers": "^9.3.1",
+    "@deck.gl/mapbox": "^9.3.1",
+    "@loaders.gl/core": "^4.4.1",
+    "@loaders.gl/pmtiles": "^4.4.1",
+    "maplibre-gl": "^5.24.0",
+    "pmtiles": "^4.4.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}
